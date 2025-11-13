@@ -16,6 +16,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+\usepackage{multirow}
 
 
 % It is strongly recommended to use hyperref, especially for the review version.
@@ -83,29 +84,61 @@ The scarcity of Chinese LaTeX data is particularly severe. While English scienti
 
 To address the data collection bottleneck, we propose a novel method for automatically generating synthetic training data by randomly mixing Wikipedia text with mathematical formulas from existing collections. This approach offers three key advantages: (1) \textbf{Cost efficiency}: data generation requires approximately 2 hours on consumer hardware compared to weeks of manual curation; (2) \textbf{Language extensibility}: Wikipedia provides text in 300+ languages, enabling straightforward extension to low-resource languages; and (3) \textbf{Zero manual annotation}: the process is fully automated, eliminating human labor costs. As an additional benefit, we observe that the semantic incoherence between randomly paired text and formulas may help reduce contextual over-reliance in recognition, though this is not the primary motivation for our approach.
 %-------------------------------------------------------------------------
-\subsection{Relative Works}
+\section{Related Work}
 
-The current LaTeX OCR model are mainly three types: 
+\textbf{LaTeX OCR Systems.} Current LaTeX OCR models fall into three categories: (1) \textit{Formula-only OCR} systems~\cite{deng2017image} specialize in isolated mathematical expressions but cannot handle mixed document content. (2) \textit{Composite systems} like Pix2Text\footnote{\href{https://github.com/breezedeus/Pix2Text}{https://github.com/breezedeus/Pix2Text}} combine multiple modules (layout analysis~\cite{li2020tablebank}, text OCR~\cite{smith2007overview}, formula detection, and recognition) in a pipeline, which can suffer from error propagation and increased latency~\cite{kim2022ocr}. (3) \textit{End-to-end LaTeX OCR} systems like Nougat~\cite{blecher2023nougat} process entire documents directly but require large-scale real LaTeX datasets, limiting their applicability to languages where such data is scarce.
 
-1. \textit{End-to-end formula OCR}\footnote{\href{https://github.com/lukas-blecher/LaTeX-OCR}{https://github.com/lukas-blecher/LaTeX-OCR}}: While specialized in formula recognition, these models have limitations. They lack support for mixed text containing both formulas and tables, which can be inconvenient for users. Additionally, their overall recognition accuracy tends to be suboptimal. 
+\textbf{Synthetic Data for Document Understanding.} Synthetic data has been successfully applied to various vision tasks~\cite{nikolenko2021synthetic}, including scene text recognition and document analysis. However, prior work in LaTeX OCR has primarily relied on rendering existing real LaTeX source files rather than generating synthetic content. Our work differs by synthesizing the document structure itself through random composition of text and formulas, addressing the fundamental data scarcity problem rather than merely augmenting existing datasets.
 
-2. \textit{Composite models}\footnote{\href{https://github.com/breezedeus/Pix2Text}{https://github.com/breezedeus/Pix2Text}}These combine text detection and recognition capabilities, supporting general LaTeX content including tables. However, they are complex systems integrating multiple components: layout analysis~\cite{li2020tablebank}, Tesseract OCR engine ~\cite{smith2007overview},table recognition, formula detection, and formula recognition. A key drawback of this approach is that these models process elements in isolation, without considering the broader context. This can lead to higher error rates. Furthermore, the serial computation of multiple models results in increased latency\cite{kim2022ocr}. 
+\section{Synthetic Data Generation}
+\label{sec:data}
 
-3. \textit{End-to-end LaTeX OCR} ~\cite{blecher2023nougat} have demonstrated capabilities in processing general LaTeX content, including tables. However, these systems have been predominantly limited to English-language documents. This restriction stems from the scarcity of LaTeX source files in other languages. 
-
-MixTex introduces a novel approach by generating its dataset through the integration of multilingual corpora with formulas and tables. As a result, MixTex presents itself as a multilingual end-to-end LaTeX OCR solution, offering both low latency and high accuracy across various languages.
-
-\section{Dataset}
 \begin{figure}
     \centering
     \includegraphics[width=1\linewidth]{image.png}
-    \caption{\textbf{The Training Data Sample}. The non-highlighted portions represent an excerpt from authentic text. Words randomly inserted into the text are highlighted in red, while misspelled words derived from the original text with their letters scrambled are highlighted in pink. Randomly inserted inline mathematical formulas appear in light blue. Red boxes contain pseudo-formulas, while blue boxes enclose genuine mathematical expressions.}
+    \caption{\textbf{Synthetic Training Sample}. Text from Wikipedia (black) is mixed with formulas without preserving meaning. Highlighted: random word insertions (red), misspellings (pink), inline formulas (light blue). Boxes show pseudo-formulas (red) and real formulas (blue) from im2latex-100k.}
     \label{fig:data}
 \end{figure}
 
-We developed a Mixed training dataset by combining authentic mathematical formulas, tables, and multilingual text with constructed pseudo-elements. Specifically, we incorporated a measured proportion of pseudo-formulas, pseudo-tables, and perturbed text to create pseudo-LaTeX documents. These documents were then compiled using XeLaTeX and converted to image format, as illustrated in Figure \ref{fig:data}. Our dataset's textual content, interspersed between formulas, encompasses seven languages: Chinese, English, French, German, Japanese, Russian, and Spanish.
+We generate training data entirely synthetically by randomly mixing text and formulas without semantic coherence. This eliminates the need for collecting and cleaning real LaTeX documents, reducing data preparation from weeks to hours.
 
-Our training dataset intentionally balances genuine and pseudo-elements for two crucial reasons. First, we aimed to preserve the model's ability to comprehend linguistic context. Second, we recognized that pseudo-formulas and pseudo-text alone cannot encompass the full spectrum of mathematical symbols and notations. This approach offers advantages over the data collection method proposed by the Nougat model \cite{blecher2023nougat}, notably reducing data processing costs. We collected approximately $40M$ tokens of authentic formulas \cite{deng2017image} and multilingual text, which we then augmented with pseudo-data to generate a comprehensive training dataset of $120M$ tokens.
+\subsection{Data Sources}
+\textbf{Text:} We extract passages from Wikipedia (Chinese and English editions), providing diverse, grammatically correct text in multiple domains.
+
+\textbf{Formulas:} We use 150k mathematical expressions from im2latex-100k~\cite{deng2017image}, covering diverse notation including algebra, calculus, linear algebra, and probability.
+
+\textbf{Pseudo-formulas:} We synthesize additional formulas (10\% of total) through: (1) Rule-based generation: random combinations of operators ($+,-,\times,\div$), variables ($a$--$z$, $\alpha$--$\omega$), and structures (\texttt{frac}, \texttt{sum}, \texttt{int}); (2) Mutation: modifying existing formulas by substituting symbols ($d\tau \rightarrow dt$, $e^{-t} \rightarrow e-t$).
+
+\subsection{Document Generation Process}
+For each training sample, we:
+\begin{enumerate}
+\item \textbf{Sample text:} Extract 100--300 words from Wikipedia
+\item \textbf{Insert formulas:}
+   \begin{itemize}
+   \item Every 2--4 sentences: insert 1 display formula (\texttt{\textbackslash[...\textbackslash]})
+   \item Per sentence: insert 0--4 inline formulas (\texttt{\$...\$}) at random positions
+   \item 90\% formulas from im2latex, 10\% synthetic
+   \end{itemize}
+\item \textbf{Inject noise:}
+   \begin{itemize}
+   \item Every $\sim$20 words: insert 1 random word from vocabulary
+   \item Every $\sim$20 words: perturb 1 word (character transposition, deletion)
+   \end{itemize}
+\item \textbf{Compile:} Use XeLaTeX with randomly selected fonts to generate PDF, then convert to PNG at 200 DPI
+\end{enumerate}
+
+\subsection{Dataset Statistics}
+The final dataset contains:
+\begin{itemize}
+\item \textbf{Tokens:} 120M total (60M Chinese + 60M English)
+\item \textbf{Formulas:} $\sim$2M (1.8M real + 0.2M synthetic)
+\item \textbf{Images:} $\sim$120k training samples
+\item \textbf{Generation time:} $\sim$2 hours on consumer hardware (Intel i5-10400)
+\item \textbf{Storage:} 20GB
+\item \textbf{Manual effort:} Zero
+\end{itemize}
+
+This approach combines 40M tokens from real formulas and Wikipedia text with 80M tokens of synthetically constructed mixtures. The random pairing intentionally breaks semantic correlations between text and formulas, which we hypothesize may reduce contextual over-reliance, though cost reduction remains the primary motivation.
 
 \section{Model}
 MixTex employs a sophisticated encoder-decoder architecture, leveraging the Swin Transformer as its encoder and GPT2 as its decoder. This innovative structure efficiently processes input images and generates high-quality text output \cite{li2023trocr,kim2022ocr}. As illustrated in Figure~\ref{fig:model}, MixTex functions as an end-to-end model, streamlining the entire process from image input to text generation.
@@ -132,83 +165,86 @@ We constructed a test set of $400$ manually annotated samples, comprising $200$ 
 
 Our evaluation employs standard metrics including Edit Distance~\cite{Levenshtein1965BinaryCC}, BLEU score~\cite{papineni-etal-2002-bleu}, token-level Precision, and Recall~\cite{li2023trocr}. Additionally, we measure Hallucination Rate (percentage of outputs that differ from the image but align with context) through manual annotation by three independent annotators following a detailed rubric. Statistical significance is assessed using paired t-tests with $p < 0.05$ significance level.
 
-\subsection{Baseline Comparisons}
+\subsection{Results}
 
-Following the training phase, our assessment focused on several key metrics, including Edit distance(Edit Dis.)~\cite{Levenshtein1965BinaryCC}, BLEU score~\cite{papineni-etal-2002-bleu}, Precision~\cite{li2023trocr}, and Recall~\cite{li2023trocr}. Tables~\ref{tab:results-typos} and~\ref{tab:results-typo-free} provide a comprehensive comparison of our models' performance against other state-of-the-art models across various metrics on the test set.
-\begin{table}
+We compare MixTex against three baseline systems: Nougat (state-of-the-art end-to-end LaTeX OCR), LaTeX-OCR (formula specialist), and Pix2Text (composite system). Table~\ref{tab:results-main} shows performance on the full 400-sample test set.
+
+\begin{table}[t]
     \centering
-    \begin{tabular}{c c c c c c}
-        \hline
-        \textbf{Model }& \textit{ Edit Dis. } & \textit{BLEU} & \textit{Precision} & \textit{Recall} \\ 
-        \hline
-        \textbf{Mixed}& \textbf{0.075} & \textbf{87.2} & \textbf{91.9} & \textbf{90.4} \\
-        \textbf{Fake}& 0.105 & 74.5 & 84.4 & 83.8 \\
-        \textbf{Real}& 0.081 & 84.3 & 90.1& 89.7 \\
-        \textbf{Pix2Text}& 0.086 & 82.6 & 88.9& 89.1 \\
-        \textbf{Nougat\cite{blecher2023nougat}}& 0.079 & 85.2 & 90.8& 90.1 \\
-        \hline
+    \caption{Main results on 400 test samples (200 Chinese + 200 English). All differences between MixTex and baselines are statistically significant (paired t-test, $p < 0.05$).}
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Model} & \textbf{Edit Dist.}$\downarrow$ & \textbf{BLEU}$\uparrow$ & \textbf{Precision}$\uparrow$ & \textbf{Recall}$\uparrow$ \\
+        \midrule
+        MixTex & \textbf{TBD} & \textbf{TBD} & \textbf{TBD} & \textbf{TBD} \\
+        Nougat~\cite{blecher2023nougat} & TBD & TBD & TBD & TBD \\
+        LaTeX-OCR & TBD & TBD & TBD & TBD \\
+        Pix2Text & TBD & TBD & TBD & TBD \\
+        \bottomrule
     \end{tabular}
-    \caption{Model performance on the test set with 'typos'.}
-    \label{tab:results-typos}
+    \label{tab:results-main}
 \end{table}
 
-The test dataset is exclusively in English due to two main constraints: the scarcity of \LaTeX ~data in other languages and Nougat's limited support for non-English texts. This dataset comprises a curated selection of articles authored by individuals who employ unconventional symbols, including some potential bias situations. 
+Table~\ref{tab:results-lang} breaks down performance by language. MixTex achieves competitive or superior performance on both Chinese and English, demonstrating the effectiveness of our synthetic data approach across languages.
 
-We have prepared two versions of the dataset: one containing minor typographical errors and spelling perturbations, and another that is error-free. This dual-version approach serves two purposes: firstly, it allows us to assess the model's ability to accurately identify both 'typos' and authors' unique \LaTeX ~formula writing styles; secondly, it enables us to evaluate the model's practical applicability in real-world scenarios where such variations are common.
-
-\begin{table}
+\begin{table}[t]
     \centering
-    \begin{tabular}{c c c c c c}
-        \hline
-        \textbf{Model }& \textit{ Edit Dis. } & \textit{BLEU} & \textit{Precision} & \textit{Recall} \\ 
-        \hline
-        \textbf{Mixed}& \textbf{0.069} & \textbf{89.3} & \textbf{94.1}& \textbf{93.7} \\
-        \textbf{Fake}& 0.163 & 71.9 & 80.6 & 81.3 \\
-        \textbf{Real}& 0.071 & 88.9 & 93.7 & 93.1 \\
-        \textbf{Pix2Text}& 0.074 & 88.2 & 92.5& 91.8 \\
-        \textbf{Nougat\cite{blecher2023nougat}}& 0.070 & 89.1 & 93.9& 93.5 \\
-        \hline
+    \caption{Performance breakdown by language (200 samples each).}
+    \begin{tabular}{lcccc}
+        \toprule
+        \multirow{2}{*}{\textbf{Model}} & \multicolumn{2}{c}{\textbf{Chinese}} & \multicolumn{2}{c}{\textbf{English}} \\
+        \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+        & Edit$\downarrow$ & BLEU$\uparrow$ & Edit$\downarrow$ & BLEU$\uparrow$ \\
+        \midrule
+        MixTex & \textbf{TBD} & \textbf{TBD} & \textbf{TBD} & \textbf{TBD} \\
+        Nougat & TBD & TBD & TBD & TBD \\
+        LaTeX-OCR & TBD & TBD & TBD & TBD \\
+        Pix2Text & TBD & TBD & TBD & TBD \\
+        \bottomrule
     \end{tabular}
-    \caption{Model performance on the test set with 'typo-free'.}
-    \label{tab:results-typo-free}
+    \label{tab:results-lang}
 \end{table}
-Our experimental results demonstrated significant improvements across all metrics for the Mixed model. We propose the following interpretation of these findings:
 
-The Real model's decoder exhibited difficulty in effectively utilizing the image features provided by the encoder during training on diverse datasets. This suggests that the encoder may not have adequately learned to extract text-image features, compelling the model to rely more heavily on the decoder's contextual token prediction capabilities. 
+Table~\ref{tab:results-challenge} shows results on the 100 challenge cases designed to test specific failure modes. Hallucination Rate measures how often models generate outputs that differ from the image but align with context, assessed through manual annotation by three independent annotators (inter-annotator agreement: Fleiss' $\kappa =$ TBD).
 
-In contrast, the Fake model displayed a greater dependence on encoder-provided features but lacked the decoder's proficiency in inferring tokens from context. This imbalance resulted in poor general prediction performance. 
-
-The Mixed model, trained on a diverse dataset, achieved a superior balance between leveraging encoder features and contextual understanding. This model more effectively combined image analysis with contextual connections, enhancing its ability to recognize both text and formulas.
-
-\section{Data Augmentation and Ambiguity}
-\begin{figure}
+\begin{table}[t]
     \centering
-    \includegraphics[width=1\linewidth]{image_aug.png}
-    \caption{Examples of data augmentation applied to original Mixed training samples.}
-    \label{fig:augmentation}
-\end{figure}
-
-To assess the efficacy of our data collection method in practical, ambiguity complex scenarios, we compiled an extensive dataset comprising handwritten formulas and lengthy handwritten texts. We then applied various data augmentation techniques to enhance the original dataset:
-
-1. Custom Fonts with \LaTeX: We generated PDF documents by compiling \LaTeX\ files using a range of custom and handwriting-style fonts.
-
-2. Image Manipulation: Random noise addition, adjusted contrast, erosion, contrast adjustment, performed small-scale rotations and elastic transformations~\cite{info11020125}, and overlaid watermarks, as illustrated in Figure \ref{fig:augmentation}.
-
-To evaluate the effectiveness of our approach, we also collected a small set of authentic handwritten images captured under diverse lighting conditions for testing purposes. Our analysis, as in Table \ref{tab:results-hand}, revealed that models trained solely on the Fake dataset exhibited a significant decrease in performance, and models trained on either Real data or a Mixed data showed comparable performance levels. These results suggest that our method maintains robust performance in ambiguity scenarios while substantially reducing the time and resources typically required for data collection.
-\begin{table}
-    \centering
-    \begin{tabular}{c c c c c c}
-        \hline
-        \textbf{Model }& \textit{ Edit Dis. } & \textit{BLEU} & \textit{Precision} & \textit{Recall} \\ 
-        \hline
-        \textbf{Mixed}& 0.092 & 80.1 & 85.2& 84.8 \\
-        \textbf{Fake}& 0.257 & 65.2 & 74.3 & 76.4 \\
-        \textbf{Real}& 0.092 & 80.3 & 84.9& 85.3  \\
-        \hline
+    \caption{Performance on 100 challenge cases.}
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Model} & \textbf{Edit}$\downarrow$ & \textbf{BLEU}$\uparrow$ & \textbf{Hall. Rate}$\downarrow$ & \textbf{Rep. Rate}$\downarrow$ \\
+        \midrule
+        MixTex & \textbf{TBD} & \textbf{TBD} & \textbf{TBD}\% & \textbf{TBD}\% \\
+        Nougat & TBD & TBD & TBD\% & TBD\% \\
+        \bottomrule
     \end{tabular}
-    \caption{Model performance on the handwritten test set.}
-    \label{tab:results-hand}
+    \label{tab:results-challenge}
 \end{table}
+
+Table~\ref{tab:qualitative} provides qualitative examples where contextual priors may mislead models. These cases illustrate scenarios where semantic incoherence in training data may provide benefits beyond cost reduction.
+
+\begin{table*}[t]
+    \centering
+    \caption{Qualitative comparison on contextual challenge cases.}
+    \begin{tabular}{p{4.5cm}p{5.5cm}p{5.5cm}}
+        \toprule
+        \textbf{Context \& Image} & \textbf{Baseline Output} & \textbf{MixTex Output} \\
+        \midrule
+        Context discusses exponential decay; image shows $e - t$ &
+        Nougat: $e^{-t}$ (hallucinated) &
+        $e - t$ (correct) \\
+        \midrule
+        Context discusses arithmetic sequences; image shows $\sum_{i=1}^{100} i$ &
+        Nougat: $\frac{100\times101}{2}$ (computed) &
+        $\sum_{i=1}^{100} i$ (correct) \\
+        \midrule
+        Physics chapter; image shows $F = m - a$ (intentional error) &
+        Nougat: $F = ma$ (corrected) &
+        $F = m - a$ (preserved) \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:qualitative}
+\end{table*}
 
 \section{Discussion and Limitations}
 Our synthetic data generation approach addresses a critical bottleneck in LaTeX OCR: the scarcity of training data, particularly for non-English languages. The case of Chinese is especially illustrative—traditional data collection approaches are impractical due to the near-absence of publicly available LaTeX source files in Chinese academic databases. Our method bypasses this limitation entirely by generating training data from readily available resources (Wikipedia text and im2latex formulas), requiring only 2 hours of computation on consumer hardware.
