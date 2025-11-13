@@ -1,0 +1,215 @@
+% WACV 2025 Paper Template
+% based on the WACV 2024 template, which is
+% based on the CVPR 2023 template (https://media.icml.cc/Conferences/CVPR2023/cvpr2023-author_kit-v1_1-1.zip) with 2-track changes from the WACV 2023 template (https://github.com/wacv-pcs/WACV-2023-Author-Kit)
+% based on the CVPR template provided by Ming-Ming Cheng (https://github.com/MCG-NKU/CVPR_Template)
+% modified and extended by Stefan Roth (stefan.roth@NOSPAMtu-darmstadt.de)
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+%%%%%%%%% PAPER TYPE  - PLEASE UPDATE FOR FINAL VERSION
+%\usepackage[review,algorithms]{wacv}      % To produce the REVIEW version for the algorithms track
+%\usepackage[review,applications]{wacv}      % To produce the REVIEW version for the applications track
+%\usepackage{wacv}              % To produce the CAMERA-READY version
+\usepackage[pagenumbers]{wacv} % To force page numbers, e.g. for an arXiv version
+% Include other packages here, before hyperref.
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% hyperref with option pagebackref eases the reviewers' job.
+% Please disable hyperref *only* if you encounter grave issues, e.g. with the
+% file validation for the camera-ready version.
+%
+% If you comment hyperref and then uncomment it, you should delete
+% ReviewTempalte.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you
+%  should be clear).
+\usepackage[pagebackref,breaklinks,colorlinks]{hyperref}
+
+
+% Support for easy cross-referencing
+\usepackage[capitalize]{cleveref}
+\crefname{section}{Sec.}{Secs.}
+\Crefname{section}{Section}{Sections}
+\Crefname{table}{Table}{Tables}
+\crefname{table}{Tab.}{Tabs.}
+
+
+%%%%%%%%% PAPER ID  - PLEASE UPDATE
+\def\wacvPaperID{488} % *** Enter the WACV Paper ID here
+\def\confName{WACV}
+\def\confYear{2025}
+
+
+\begin{document}
+
+%%%%%%%%% TITLE - PLEASE UPDATE
+\title{MixTex: Unambiguous Recognition Should Not Rely Solely on Real Data}
+
+\author{Renqing Luo\\
+New York University\\
+251 Mercer Street, New York, N.Y. 10012\\
+{\tt\small rl5285@nyu.edu}
+% For a paper whose authors are all at the same institution,
+% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+\and
+Yuhan Xu\\
+Columbia University\\
+500 W 120th St, New York, NY 10027\\
+{\tt\small yx2843@columbia.edu}
+}
+\maketitle
+
+%%%%%%%%% ABSTRACT
+\begin{abstract}
+This paper introduces MixTex, an end-to-end LaTeX OCR model designed for low-bias multilingual recognition, along with its novel data collection method. In applying Transformer architectures to LaTeX text recognition, we identified specific bias issues, such as the frequent misinterpretation of $e-t$ as $e^{-t}$. We attribute this bias to the characteristics of the arXiv dataset commonly used for training. To mitigate this bias, we propose an innovative data augmentation method. This approach introduces controlled noise into the recognition targets by blending genuine text with pseudo-text and incorporating a small proportion of disruptive characters. We further suggest that this method has broader applicability to various disambiguation recognition tasks, including the accurate identification of erroneous notes in musical performances. MixTex's architecture leverages the Swin Transformer as its encoder and GPT2 as its decoder. Our experimental results demonstrate that this approach significantly reduces bias in recognition tasks. Notably, when processing clear and unambiguous images, the model adheres strictly to the image rather than over-relying on contextual cues for token prediction.
+\end{abstract}
+
+%%%%%%%%% BODY TEXT
+\section{Introduction}
+\label{sec:intro}
+
+Optical Character Recognition (OCR) is a technology that extracts and identifies text from images, converting it into digital text sequences. Most OCR systems, whether for document or scene images, comprise two key components: text detection and text recognition. The text detection model identifies and segments text blocks within an image, which are then processed by the text recognition model to recognize words or text lines~\cite{subramani2020survey}. Traditionally, text recognition models have employed a CNN encoder coupled with an RNN decoder~\cite{shi2016end}. Subsequent research has shown that using Transformer~\cite{vaswani2017attention} architecture, incorporating self-attention mechanisms on top of CNN, has significantly advanced text recognition tasks~\cite{diaz2021rethinking}. Furthermore, employing a vision transformer (ViT)~\cite{dosovitskiy2020image} as the encoder and a GPT2~\cite{liu2019GPT2} model as the decoder for end-to-end text recognition has achieved very high accuracy. However, due to the size limitations and performance of ViT, studies have utilized Swin Transformer~\cite{liu2021swin} as an encoder model to effectively recognize high-resolution document images~\cite{kim2022ocr}. This advancement allows for text recognition in very high-resolution document images, where optical symbols are typically well-defined and unambiguous. This clarity in document text recognition stands in stark contrast to the challenges posed by text recognition in blurred scenes. In such scenarios, significant blurring, distortion, and occlusion create ambiguities that often require context-based judgment for accurate recognition~\cite{jiang2023revisiting,du2020pp,wang2019shape}. It's worth noting, however, that while context-based approaches are effective for ambiguous scene text recognition, their application to printed text recognition may be counterproductive.
+
+LaTeX documents, despite their high clarity, the presence of complex and variable formulas demands extreme precision in text recognition. In practice, we have observed that while Nougat~\cite{blecher2023nougat} models trained on large arxiv datasets achieve high accuracy, they occasionally produce erroneous recognitions. For example, the model might misidentify $d\tau$, $di$, or $dl$ as $dt$, or even generate non-existent formulas. Additionally, the model may incorrectly modify equations based on context. For instance, when discussing derivatives, the model might misinterpret a defined \( z = 6 \) as \( \dot{z} = 6 \). Notably, if the model's training corpus is dominated by elementary school mathematics texts, it is likely to misrecognize $\displaystyle\sum^{+\infty}$ as $ \frac{+\infty}{2}$. These issues exemplify the underspecification problem in machine learning pipelines~\cite{d2022underspecification}. Our research aims to minimize such bias-induced errors while preserving the model's ability to utilize contextual information effectively. Given that LaTeX formula recognition requires strict adherence to syntax rules (e.g., correct use of curly braces and left-right closures), models with robust long-term contextual memory capabilities are essential for accurately recognizing complex formulas.
+
+To address these challenges, we propose a novel method for automatically generating a hybrid dataset of pseudo-formulas and pseudo-corpora. While traditional data augmentation techniques in OCR tasks often focus on adding noise to images~\cite{shorten2019survey}, our approach introduces noise directly into the textual content. This method aims to enhance the training data, thereby improving model generalization, reducing bias, and increasing recognition accuracy across diverse scenarios.
+%-------------------------------------------------------------------------
+\subsection{Relative Works}
+
+The current LaTeX OCR model are mainly three types: 
+
+1. \textit{End-to-end formula OCR}\footnote{\href{https://github.com/lukas-blecher/LaTeX-OCR}{https://github.com/lukas-blecher/LaTeX-OCR}}: While specialized in formula recognition, these models have limitations. They lack support for mixed text containing both formulas and tables, which can be inconvenient for users. Additionally, their overall recognition accuracy tends to be suboptimal. 
+
+2. \textit{Composite models}\footnote{\href{https://github.com/breezedeus/Pix2Text}{https://github.com/breezedeus/Pix2Text}}These combine text detection and recognition capabilities, supporting general LaTeX content including tables. However, they are complex systems integrating multiple components: layout analysis~\cite{li2020tablebank}, Tesseract OCR engine ~\cite{smith2007overview},table recognition, formula detection, and formula recognition. A key drawback of this approach is that these models process elements in isolation, without considering the broader context. This can lead to higher error rates. Furthermore, the serial computation of multiple models results in increased latency\cite{kim2022ocr}. 
+
+3. \textit{End-to-end LaTeX OCR} ~\cite{blecher2023nougat} have demonstrated capabilities in processing general LaTeX content, including tables. However, these systems have been predominantly limited to English-language documents. This restriction stems from the scarcity of LaTeX source files in other languages. 
+
+MixTex introduces a novel approach by generating its dataset through the integration of multilingual corpora with formulas and tables. As a result, MixTex presents itself as a multilingual end-to-end LaTeX OCR solution, offering both low latency and high accuracy across various languages.
+
+\section{Dataset}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{image.png}
+    \caption{\textbf{The Training Data Sample}. The non-highlighted portions represent an excerpt from authentic text. Words randomly inserted into the text are highlighted in red, while misspelled words derived from the original text with their letters scrambled are highlighted in pink. Randomly inserted inline mathematical formulas appear in light blue. Red boxes contain pseudo-formulas, while blue boxes enclose genuine mathematical expressions.}
+    \label{fig:data}
+\end{figure}
+
+We developed a Mixed training dataset by combining authentic mathematical formulas, tables, and multilingual text with constructed pseudo-elements. Specifically, we incorporated a measured proportion of pseudo-formulas, pseudo-tables, and perturbed text to create pseudo-LaTeX documents. These documents were then compiled using XeLaTeX and converted to image format, as illustrated in Figure \ref{fig:data}. Our dataset's textual content, interspersed between formulas, encompasses seven languages: Chinese, English, French, German, Japanese, Russian, and Spanish.
+
+Our training dataset intentionally balances genuine and pseudo-elements for two crucial reasons. First, we aimed to preserve the model's ability to comprehend linguistic context. Second, we recognized that pseudo-formulas and pseudo-text alone cannot encompass the full spectrum of mathematical symbols and notations. This approach offers advantages over the data collection method proposed by the Nougat model \cite{blecher2023nougat}, notably reducing data processing costs. We collected approximately $40M$ tokens of authentic formulas \cite{deng2017image} and multilingual text, which we then augmented with pseudo-data to generate a comprehensive training dataset of $120M$ tokens.
+
+\section{Model}
+MixTex employs a sophisticated encoder-decoder architecture, leveraging the Swin Transformer as its encoder and GPT2 as its decoder. This innovative structure efficiently processes input images and generates high-quality text output \cite{li2023trocr,kim2022ocr}. As illustrated in Figure~\ref{fig:model}, MixTex functions as an end-to-end model, streamlining the entire process from image input to text generation.
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{3f0d1b6ab101a32aacc1814152a2fe0.png}
+    \caption{\textbf{The MixTex Pipeline}. The process begins with an input \LaTeX ~ document image, which is fed into a Swin Transformer encoder. This encoder maps the image into embeddings, effectively capturing both local and global features. Subsequently, these embeddings are processed by a GPT2 decoder, which translates them into \LaTeX ~ formatted text.}
+    \label{fig:model}
+\end{figure}
+
+The \textbf{vision encoder} transforms the input document image $\mathbf{x} \in \mathbb{R}^{H\times W\times 3}$ into a set of embedding vectors $\{\mathbf{z}_i | \mathbf{z}_i \in \mathbb{R}^d, 1 \le i \le n\}$. Here, $H$ and $W$ represent the image height and width, respectively, $d$ denotes the hidden dimension of both the encoder and decoder, and $n$ corresponds to the feature map size, which scales linearly with the image dimensions. We opted for the Swin Transformer as our vision encoder due to its ability to process large images efficiently, offering low latency. Moreover, this architecture effectively combines the local feature extraction capabilities of Convolutional Neural Networks (CNNs) with the global context modeling of Vision Transformers (ViTs), making it particularly well-suited for feature extraction in text-rich images. The decoder is initialized using a pre-trained model\footnote{\href{https://huggingface.co/microsoft/swin-tiny-patch4-window7-224}{swin-tiny-patch4-window7-224}}.
+
+The \textbf{text decoder} processes the encoder's embedding output $\{\mathbf{z}_i\}$ and a token sequence $\{\mathbf{y}_i\}$ using cross-attention. Here, $\mathbf{y}_i \in \mathbb{R}^v$ represents the one-hot vector of the $i$-th token, $v$ denotes the tokenizer's vocabulary size, and $m$ is the maximum decoding token length. The decoder generates output and computes loss autoregressively, similar to GPT~\cite{brown2020language}. We employ GPT2 as the decoder, configured with a hidden size of $768$, $12$ attention heads, and $4$ hidden layers. The decoder's tokenizer, which has a smaller vocabulary size, is trained on the dataset. Due to the retraining of a tokenizer suitable for multilingual \LaTeX, our decoder uses random weight initialization.
+
+MixTex's decoder is notably smaller than Nougat's, a design choice that addresses both inference latency and potential bias issues in Transformer-based text recognition models. This approach aims to prevent a significant parameter count disparity between the encoder and decoder. Our objective is to make the decoder more reliant on the encoder's extracted features, rather than primarily predicting the next token based on context alone.
+
+\section{Training and Results}
+We trained models with approximately $78$ million parameters using three distinct dataset configurations: Fake (entirely synthetic data), Real (exclusively real-world data), and Mixed (a combination of synthetic and real-world data). 
+
+The training process spanned $5$ epochs. We utilized input images of size $500 \times 400$ pixels, with a maximum output sequence length of $296$ tokens. The training was conducted with a batch size of $24$, employing an initial learning rate of $1.3 \times 10^{-4}$ that decayed to a final rate of $7 \times 10^{-6}$. We opted for the AdamW optimizer~\cite{loshchilov2017decoupled} with its default parameter settings and leveraged fp16 precision to enhance computational efficiency.
+
+Following the training phase, our assessment focused on several key metrics, including Edit distance(Edit Dis.)~\cite{Levenshtein1965BinaryCC}, BLEU score~\cite{papineni-etal-2002-bleu}, Precision~\cite{li2023trocr}, and Recall~\cite{li2023trocr}. Tables~\ref{tab:results-typos} and~\ref{tab:results-typo-free} provide a comprehensive comparison of our models' performance against other state-of-the-art models across various metrics on the test set.
+\begin{table}
+    \centering
+    \begin{tabular}{c c c c c c}
+        \hline
+        \textbf{Model }& \textit{ Edit Dis. } & \textit{BLEU} & \textit{Precision} & \textit{Recall} \\ 
+        \hline
+        \textbf{Mixed}& \textbf{0.075} & \textbf{87.2} & \textbf{91.9} & \textbf{90.4} \\
+        \textbf{Fake}& 0.105 & 74.5 & 84.4 & 83.8 \\
+        \textbf{Real}& 0.081 & 84.3 & 90.1& 89.7 \\
+        \textbf{Pix2Text}& 0.086 & 82.6 & 88.9& 89.1 \\
+        \textbf{Nougat\cite{blecher2023nougat}}& 0.079 & 85.2 & 90.8& 90.1 \\
+        \hline
+    \end{tabular}
+    \caption{Model performance on the test set with 'typos'.}
+    \label{tab:results-typos}
+\end{table}
+
+The test dataset is exclusively in English due to two main constraints: the scarcity of \LaTeX ~data in other languages and Nougat's limited support for non-English texts. This dataset comprises a curated selection of articles authored by individuals who employ unconventional symbols, including some potential bias situations. 
+
+We have prepared two versions of the dataset: one containing minor typographical errors and spelling perturbations, and another that is error-free. This dual-version approach serves two purposes: firstly, it allows us to assess the model's ability to accurately identify both 'typos' and authors' unique \LaTeX ~formula writing styles; secondly, it enables us to evaluate the model's practical applicability in real-world scenarios where such variations are common.
+
+\begin{table}
+    \centering
+    \begin{tabular}{c c c c c c}
+        \hline
+        \textbf{Model }& \textit{ Edit Dis. } & \textit{BLEU} & \textit{Precision} & \textit{Recall} \\ 
+        \hline
+        \textbf{Mixed}& \textbf{0.069} & \textbf{89.3} & \textbf{94.1}& \textbf{93.7} \\
+        \textbf{Fake}& 0.163 & 71.9 & 80.6 & 81.3 \\
+        \textbf{Real}& 0.071 & 88.9 & 93.7 & 93.1 \\
+        \textbf{Pix2Text}& 0.074 & 88.2 & 92.5& 91.8 \\
+        \textbf{Nougat\cite{blecher2023nougat}}& 0.070 & 89.1 & 93.9& 93.5 \\
+        \hline
+    \end{tabular}
+    \caption{Model performance on the test set with 'typo-free'.}
+    \label{tab:results-typo-free}
+\end{table}
+Our experimental results demonstrated significant improvements across all metrics for the Mixed model. We propose the following interpretation of these findings:
+
+The Real model's decoder exhibited difficulty in effectively utilizing the image features provided by the encoder during training on diverse datasets. This suggests that the encoder may not have adequately learned to extract text-image features, compelling the model to rely more heavily on the decoder's contextual token prediction capabilities. 
+
+In contrast, the Fake model displayed a greater dependence on encoder-provided features but lacked the decoder's proficiency in inferring tokens from context. This imbalance resulted in poor general prediction performance. 
+
+The Mixed model, trained on a diverse dataset, achieved a superior balance between leveraging encoder features and contextual understanding. This model more effectively combined image analysis with contextual connections, enhancing its ability to recognize both text and formulas.
+
+\section{Data Augmentation and Ambiguity}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{image_aug.png}
+    \caption{Examples of data augmentation applied to original Mixed training samples.}
+    \label{fig:augmentation}
+\end{figure}
+
+To assess the efficacy of our data collection method in practical, ambiguity complex scenarios, we compiled an extensive dataset comprising handwritten formulas and lengthy handwritten texts. We then applied various data augmentation techniques to enhance the original dataset:
+
+1. Custom Fonts with \LaTeX: We generated PDF documents by compiling \LaTeX\ files using a range of custom and handwriting-style fonts.
+
+2. Image Manipulation: Random noise addition, adjusted contrast, erosion, contrast adjustment, performed small-scale rotations and elastic transformations~\cite{info11020125}, and overlaid watermarks, as illustrated in Figure \ref{fig:augmentation}.
+
+To evaluate the effectiveness of our approach, we also collected a small set of authentic handwritten images captured under diverse lighting conditions for testing purposes. Our analysis, as in Table \ref{tab:results-hand}, revealed that models trained solely on the Fake dataset exhibited a significant decrease in performance, and models trained on either Real data or a Mixed data showed comparable performance levels. These results suggest that our method maintains robust performance in ambiguity scenarios while substantially reducing the time and resources typically required for data collection.
+\begin{table}
+    \centering
+    \begin{tabular}{c c c c c c}
+        \hline
+        \textbf{Model }& \textit{ Edit Dis. } & \textit{BLEU} & \textit{Precision} & \textit{Recall} \\ 
+        \hline
+        \textbf{Mixed}& 0.092 & 80.1 & 85.2& 84.8 \\
+        \textbf{Fake}& 0.257 & 65.2 & 74.3 & 76.4 \\
+        \textbf{Real}& 0.092 & 80.3 & 84.9& 85.3  \\
+        \hline
+    \end{tabular}
+    \caption{Model performance on the handwritten test set.}
+    \label{tab:results-hand}
+\end{table}
+
+\section{Conclusion}
+To enhance model robustness and mitigate underspecification, we propose introducing perturbations and randomness to the text content in unambiguous recognition tasks. To address the "bias" issue in Transformer-based models for text image recognition, we advocate using a mixed dataset for training. Our results align with our objectives: for clear images, the model adheres strictly to the image content without free interpretation.
+
+This approach also has significant potential in primary education. Current Transformer-based handwritten text recognition models often automatically correct students' spelling errors, making it challenging for teachers to identify these mistakes quickly. Our proposed data collection method enables the trained model to effectively detect incorrect content. Furthermore, this method is applicable not only to text recognition also to other unambiguous recognition tasks, such as identifying and correcting errors in musical performances.
+
+%%%%%%%%% REFERENCES
+{\small
+\bibliographystyle{ieee_fullname}
+\bibliography{egbib}
+}
+
+\end{document}
