@@ -1,0 +1,800 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+\title{MixTex: Programmatically Assembled Training Data for\\Mixed Text-Formula LaTeX OCR}
+\author{Yuhan Xu}
+\institute{Columbia University}
+\date{Research Proposal Presentation}
+
+\begin{document}
+
+\frame{\titlepage}
+
+%% SECTION 1: PROBLEM DEFINITION
+\section{Problem Definition}
+
+\begin{frame}{The Real-World LaTeX OCR Challenge}
+\textbf{What users actually need:}
+\begin{itemize}
+    \item Recognize complete documents with text and formulas interspersed
+    \item Example: Textbooks, lecture notes, theorem statements
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{block}{Example - What We Need to Recognize}
+\textit{``The Gaussian integral satisfies the relation}
+\[
+\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+\]
+\textit{for all continuous functions on the real line.''}
+\end{block}
+
+\vspace{0.2cm}
+\textbf{Challenge:} Current datasets don't match this requirement.
+\end{frame}
+
+\begin{frame}{The Dataset Gap}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{What's Available:}
+\begin{itemize}
+    \item \textcolor{red}{Isolated formulas only}
+    \item im2latex-100k: 100k formula images
+    \item MathBridge: formula-focused
+    \item No surrounding text context
+\end{itemize}
+
+\vspace{0.3cm}
+\includegraphics[width=\textwidth]{isolated_formula_example.png}
+\footnotesize{Example: $\int_0^\infty e^{-x}dx$ (isolated)}
+
+\column{0.48\textwidth}
+\textbf{What's Needed:}
+\begin{itemize}
+    \item \textcolor{blue}{Mixed text-formula documents}
+    \item Text with embedded inline formulas
+    \item Display formulas with context
+    \item Real document structure
+\end{itemize}
+
+\vspace{0.3cm}
+\includegraphics[width=\textwidth]{mixed_document_example.png}
+\footnotesize{Example: Theorem statement with formula}
+\end{columns}
+
+\vspace{0.3cm}
+\begin{alertblock}{Critical Gap}
+Publicly available datasets provide isolated formulas, but real applications require recognizing formulas \textbf{within continuous text}.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Why Can't We Use Real Documents?}
+\textbf{Option 1: ArXiv Dataset}
+\begin{itemize}
+    \item Millions of papers, but weeks of collection/cleaning
+    \item English-only (Nougat cannot process Chinese)
+    \item University-level research papers (distribution mismatch for K-12 education)
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Option 2: Collect Real Educational Materials}
+\begin{itemize}
+    \item Pilot study: 3 hours to collect 100 samples
+    \item 500 samples $\approx$ 15 hours; 10k samples $\approx$ 300 hours
+    \item Chinese: <1\% of papers provide LaTeX source (CNKI/Wanfang)
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Option 3: Multilingual Extension}
+\begin{itemize}
+    \item Each new language requires collecting thousands of documents
+    \item Impossible for low-resource languages
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{block}{Core Problem}
+How can we train mixed text-formula OCR without extensive real document collection?
+\end{block}
+\end{frame}
+
+%% SECTION 2: PROPOSED SOLUTION
+\section{Proposed Solution}
+
+\begin{frame}{Key Insight: Separate Structure from Semantics}
+\textbf{Observation:}
+\begin{itemize}
+    \item OCR models need to learn the \textcolor{blue}{visual-structural pattern}
+    \item Text and formulas appear in specific layout patterns
+    \item Semantic coherence (formula matching text topic) is secondary for recognition
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Our Approach:}
+\begin{enumerate}
+    \item Take real natural language text (Wikipedia)
+    \item Take real mathematical formulas (im2latex-100k)
+    \item \textcolor{red}{Randomly combine them} without preserving meaning
+    \item Generate training documents programmatically
+\end{enumerate}
+
+\vspace{0.3cm}
+\begin{exampleblock}{Example Output}
+\textit{``Climate change affects global temperatures. The solution to}
+\[
+\nabla^2 \phi + k^2\phi = 0
+\]
+\textit{shows that renewable energy is important.''}
+\end{exampleblock}
+
+\textbf{Note:} Semantically incoherent, but structurally valid LaTeX document.
+\end{frame}
+
+\begin{frame}{Data Generation Process}
+\begin{columns}[T]
+\column{0.58\textwidth}
+\textbf{Step-by-Step Algorithm:}
+\begin{enumerate}
+    \item Sample 100--300 words from Wikipedia
+    \item Insert formulas randomly:
+    \begin{itemize}
+        \item Every 2--4 sentences: 1 display formula
+        \item Per sentence: 0--4 inline formulas
+        \item 90\% from im2latex, 10\% generated
+    \end{itemize}
+    \item Inject controlled noise:
+    \begin{itemize}
+        \item Random word insertions (5\%)
+        \item Spelling perturbations (5\%)
+    \end{itemize}
+    \item Compile with XeLaTeX
+    \item Convert to PNG at 200 DPI
+\end{enumerate}
+
+\column{0.38\textwidth}
+\textbf{Data Sources:}
+\begin{itemize}
+    \item \textbf{Text:} Wikipedia (300+ languages)
+    \item \textbf{Formulas:} im2latex-100k (150k expressions)
+    \item \textbf{Generated:} 10\% via mutation
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Output:}
+\begin{itemize}
+    \item 1M training images
+    \item 120M tokens total
+    \item 60M Chinese + 60M English
+    \item \textcolor{blue}{2 hours generation time}
+    \item \textcolor{blue}{Zero manual effort}
+\end{itemize}
+\end{columns}
+
+\vspace{0.3cm}
+\begin{alertblock}{Key Advantage}
+Can generate training data for \textbf{any language} where Wikipedia exists, without needing real LaTeX documents in that language.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Why This Approach Works}
+\textbf{Terminology Clarification:}
+\begin{itemize}
+    \item NOT "synthetic data" (components are 100\% real)
+    \item NOT "artificial data" (text is authentic natural language)
+    \item \textbf{Better term:} "Programmatically assembled from real components"
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{What's Real:}
+\begin{itemize}
+    \item[$\checkmark$] Text: Real Wikipedia articles (grammatically correct)
+    \item[$\checkmark$] Formulas: 90\% real from im2latex (validated expressions)
+    \item[$\checkmark$] LaTeX compilation: Real rendering process
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{What's Programmatic:}
+\begin{itemize}
+    \item[$\times$] Text-formula pairing (random, not semantic)
+    \item[$\times$] Formula placement (stochastic intervals)
+    \item[$\times$] Document structure (programmatic assembly)
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{block}{Hypothesis}
+Models can learn visual-structural patterns from programmatically assembled data, then adapt to real semantic documents with minimal fine-tuning.
+\end{block}
+\end{frame}
+
+%% SECTION 3: EXPERIMENTAL DESIGN
+\section{Experimental Design}
+
+\begin{frame}{Three-Stage Data Pipeline}
+\begin{table}
+\small
+\begin{tabular}{llll}
+\toprule
+\textbf{Dataset} & \textbf{Size} & \textbf{Purpose} & \textbf{Cost} \\
+\midrule
+\textbf{Pretraining} & 1M samples & Initial training & 2h generation \\
+(Programmatic) & 120M tokens & Learn structure & \$0 manual \\
+\midrule
+\textbf{Fine-tuning} & 500 samples & Domain adaptation & $\sim$15h collection \\
+(Real LaTeX) & Mixed sources & Semantic alignment & Independent \\
+\midrule
+\textbf{Test Set} & 500 samples & Evaluation & $\sim$30h collection \\
+(Real Education) & 100 K-8 + 400 Univ & Domain generalization & Independent \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\textbf{Critical Independence:}
+\begin{itemize}
+    \item Fine-tuning set $\cap$ Test set = $\emptyset$
+    \item Pretraining uses programmatically assembled data (no overlap possible)
+    \item Cannot use ArXiv for testing (contamination risk with Nougat baseline)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Test Set Design: Educational Materials}
+\textbf{Why Educational Materials?}
+\begin{itemize}
+    \item Real-world use case: digitizing textbooks, lecture notes
+    \item Tests domain adaptation (ArXiv $\rightarrow$ Education)
+    \item Covers multiple difficulty levels
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{table}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Level} & \textbf{Chinese} & \textbf{English} & \textbf{Sources} & \textbf{Total} \\
+\midrule
+Elementary (K-5) & 25 & 25 & Textbooks, worksheets & 50 \\
+Middle School (6-8) & 25 & 25 & Textbooks, exams & 50 \\
+University & 200 & 200 & Textbooks, notes, slides & 400 \\
+\midrule
+\textbf{Total} & \textbf{250} & \textbf{250} & & \textbf{500} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\textbf{Data Collection Status:}
+\begin{itemize}
+    \item Pilot: 100 samples collected (3 hours)
+    \item Remaining 400: estimated 25-30 hours
+    \item Manual annotation: LaTeX ground truth verification
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Research Questions}
+\begin{block}{RQ1: Fine-tuning Necessity}
+Does fine-tuning on 500 real samples improve performance over using only programmatically assembled pretraining data?
+\end{block}
+
+\textbf{Experiment:} Compare MixTex-PT (pretrain only) vs. MixTex-FT (pretrain + finetune)
+
+\vspace{0.3cm}
+\begin{block}{RQ2: Domain Generalization}
+How do models generalize to out-of-distribution educational materials across different levels (elementary/middle vs. university)?
+\end{block}
+
+\textbf{Experiment:} Compare performance on K-8 materials vs. university materials
+
+\vspace{0.3cm}
+\begin{block}{RQ3: Multilingual Capability}
+Can programmatically assembled training enable Chinese LaTeX OCR where existing systems provide no support?
+\end{block}
+
+\textbf{Experiment:} Demonstrate Chinese capability (Nougat: no support) and competitive English performance (Nougat: trained on millions of ArXiv papers)
+\end{frame}
+
+\begin{frame}{Baseline Comparison}
+\textbf{Primary Baseline: Nougat}
+\begin{itemize}
+    \item Trained on millions of ArXiv papers
+    \item Current state-of-the-art for English LaTeX OCR
+    \item English-only (cannot process Chinese)
+    \item University-level research paper domain
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Why We Can't Test on ArXiv:}
+\begin{itemize}
+    \item Cannot determine which ArXiv papers are in Nougat's training set
+    \item Risk of test set contamination
+    \item Need clean evaluation on independent data
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Evaluation Metrics:}
+\begin{itemize}
+    \item Edit Distance (character-level)
+    \item BLEU Score (token-level)
+    \item Token-level Precision \& Recall
+    \item Statistical significance: paired t-test ($p < 0.05$)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Expected Experimental Results}
+\begin{table}
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+\multicolumn{5}{c}{\textbf{Table 1: Ablation Study (All 500 test samples)}} \\
+\midrule
+\textbf{Model} & \textbf{Edit}$\downarrow$ & \textbf{BLEU}$\uparrow$ & \textbf{Prec.}$\uparrow$ & \textbf{Rec.}$\uparrow$ \\
+\midrule
+MixTex-PT (pretrain only) & \textit{expected worse} & & & \\
+MixTex-FT (+ finetune) & \textit{expected best} & & & \\
+Nougat (ArXiv baseline) & \textit{expected competitive} & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\begin{table}
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+\multicolumn{5}{c}{\textbf{Table 2: Domain Adaptation (by educational level)}} \\
+\midrule
+& \multicolumn{2}{c}{\textbf{K-8 (100)}} & \multicolumn{2}{c}{\textbf{University (400)}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+\textbf{Model} & Edit & BLEU & Edit & BLEU \\
+\midrule
+MixTex-FT & \textit{consistent} & & \textit{consistent} & \\
+Nougat & \textit{worse on K-8} & & \textit{better on univ.} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Hypothesis:} MixTex's domain-agnostic training should show more consistent performance across levels.
+\end{frame}
+
+\begin{frame}{Expected Experimental Results (continued)}
+\begin{table}
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+\multicolumn{5}{c}{\textbf{Table 3: Multilingual Capability (by language)}} \\
+\midrule
+& \multicolumn{2}{c}{\textbf{Chinese (250)}} & \multicolumn{2}{c}{\textbf{English (250)}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+\textbf{Model} & Edit & BLEU & Edit & BLEU \\
+\midrule
+MixTex-FT & \textit{functional} & & \textit{competitive} & \\
+Nougat & \multicolumn{2}{c}{No support} & \textit{strong baseline} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\textbf{Key Points:}
+\begin{itemize}
+    \item Chinese: Demonstrate capability where Nougat has none
+    \item English: Show competitive performance vs. million-paper training
+    \item Not claiming "better than Nougat" on English
+    \item Claiming "enables Chinese + competitive English with 2h data generation"
+\end{itemize}
+\end{frame}
+
+%% SECTION 4: CONTRIBUTIONS
+\section{Expected Contributions}
+
+\begin{frame}{Primary Contribution: Practical Data Generation Method}
+\textbf{Problem Solved:}
+\begin{itemize}
+    \item Publicly available datasets have only isolated formulas
+    \item Real applications need mixed text-formula documents
+    \item Collecting real documents is expensive/impossible for many languages
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Our Solution:}
+\begin{itemize}
+    \item Programmatically assemble real text + real formulas
+    \item 2 hours generation time on consumer hardware
+    \item Works for any language with Wikipedia coverage (300+)
+    \item Zero manual annotation cost
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Impact:}
+\begin{itemize}
+    \item Enables individual researchers to train LaTeX OCR models
+    \item Makes Chinese LaTeX OCR feasible (previously impossible)
+    \item Reduces barrier to entry from institutional to individual scale
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{alertblock}{Core Claim}
+Programmatically assembled data from real components enables competitive mixed text-formula OCR with minimal real data fine-tuning.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Secondary Contributions}
+\textbf{1. Intrinsic Multilingual Capability}
+\begin{itemize}
+    \item Formulas are language-agnostic
+    \item Text source is substitutable (Wikipedia in any language)
+    \item Enable new language by substitution, not collection
+    \item First Chinese LaTeX OCR system (to our knowledge)
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{2. Domain Adaptation Findings (Empirical)}
+\begin{itemize}
+    \item Programmatically assembled training may improve generalization
+    \item Avoids overfitting to domain-specific text-formula correlations
+    \item Preliminary evidence of better K-12 performance
+    \item Worth future investigation, not primary claim
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{3. Two-Stage Training Paradigm}
+\begin{itemize}
+    \item Large-scale programmatic pretraining (1M samples, 2 hours)
+    \item Small-scale real data fine-tuning (500 samples, 15 hours)
+    \item May apply to other document understanding tasks
+\end{itemize}
+\end{frame}
+
+\begin{frame}{What We Are NOT Claiming}
+\textbf{Explicitly Out of Scope:}
+\begin{itemize}
+    \item \textcolor{red}{$\times$} ``Our model is better than Nougat on English''
+    \begin{itemize}
+        \item We claim: competitive with far less data collection
+    \end{itemize}
+    \item \textcolor{red}{$\times$} ``We solve the bias problem in LaTeX OCR''
+    \begin{itemize}
+        \item We observe: potentially better domain adaptation
+    \end{itemize}
+    \item \textcolor{red}{$\times$} ``Our method reduces hallucination''
+    \begin{itemize}
+        \item We note: interesting future research direction
+    \end{itemize}
+    \item \textcolor{red}{$\times$} ``This works for all 300+ languages''
+    \begin{itemize}
+        \item We validate: Chinese and English only
+    \end{itemize}
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{block}{Honest Positioning}
+This is a \textbf{practical data generation method} that enables mixed text-formula OCR for languages/domains where real data is scarce. The approach is simple, reproducible, and effective.
+\end{block}
+\end{frame}
+
+%% SECTION 5: WORK ASSESSMENT
+\section{Work Assessment}
+
+\begin{frame}{What's Already Done}
+\textbf{Completed Components:}
+\begin{itemize}
+    \item[$\checkmark$] Data generation pipeline (tested, functional)
+    \item[$\checkmark$] Model architecture (Swin + GPT2, 78M parameters)
+    \item[$\checkmark$] Training infrastructure (16h on single 4090)
+    \item[$\checkmark$] Pilot data collection (100 test samples, 3 hours)
+    \item[$\checkmark$] Initial experiments (need to be redone with new framing)
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{What Needs Revision:}
+\begin{itemize}
+    \item[$\circ$] Problem statement in paper (isolated vs. mixed gap)
+    \item[$\circ$] Experimental design (new RQs and tables)
+    \item[$\circ$] Terminology throughout (programmatically assembled)
+    \item[$\circ$] Contribution positioning (method vs. performance claims)
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{alertblock}{Key Insight}
+Most implementation work is done. Primary task is reframing the narrative and re-running experiments with clearer evaluation protocol.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Remaining Work - Data Collection}
+\begin{table}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Task} & \textbf{Status} & \textbf{Estimated Time} \\
+\midrule
+Fine-tuning set (500 real) & In progress & 10 hours \\
+Test set - K-8 (100) & Partially done & 6 hours \\
+Test set - University (400) & Partially done & 20 hours \\
+Annotation verification & Pending & 10 hours \\
+\midrule
+\textbf{Total} & & \textbf{46 hours} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\textbf{Parallelization:}
+\begin{itemize}
+    \item Can collect while training models
+    \item Co-author assistance possible
+    \item Annotation can be batched
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Timeline Estimate:}
+\begin{itemize}
+    \item 2-3 weeks for complete data collection (part-time)
+    \item 1 week for experiments (multiple training runs)
+    \item 1 week for paper revision
+    \item \textbf{Total: 4-5 weeks to submission-ready}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Remaining Work - Experiments}
+\begin{table}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Experiment} & \textbf{Training Time} & \textbf{Analysis Time} \\
+\midrule
+MixTex-PT (pretrain only) & 16 hours & 2 hours \\
+MixTex-FT (pretrain + finetune) & 16h + 0.5h & 2 hours \\
+Baseline comparison (Nougat) & 0 (pre-trained) & 4 hours \\
+Statistical significance tests & N/A & 4 hours \\
+Ablation studies (optional) & 8 hours & 4 hours \\
+\midrule
+\textbf{Total} & \textbf{40-48 hours GPU} & \textbf{16 hours} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\textbf{Resource Requirements:}
+\begin{itemize}
+    \item Single RTX 4090 (available)
+    \item Can run experiments in parallel with data collection
+    \item Multiple runs for statistical reliability (3x seeds)
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Risk Mitigation:}
+\begin{itemize}
+    \item What if results don't support hypotheses?
+    \begin{itemize}
+        \item Still publishable: method contribution stands alone
+        \item Null results on domain adaptation are scientifically valid
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Remaining Work - Paper Revision}
+\textbf{Major Sections to Rewrite:}
+\begin{enumerate}
+    \item Introduction
+    \begin{itemize}
+        \item Clearly state isolated vs. mixed gap
+        \item Quantify data collection costs
+        \item Position as practical method, not bias solution
+    \end{itemize}
+    \item Related Work
+    \begin{itemize}
+        \item Explicitly discuss isolated formula datasets
+        \item Explain why they don't solve our problem
+    \end{itemize}
+    \item Experiments
+    \begin{itemize}
+        \item New RQs and hypotheses
+        \item Clear description of all three datasets
+        \item Statistical rigor (t-tests, confidence intervals)
+    \end{itemize}
+    \item Discussion
+    \begin{itemize}
+        \item Honest limitations
+        \item Future work: bias/hallucination investigation
+    \end{itemize}
+\end{enumerate}
+
+\vspace{0.3cm}
+\textbf{Estimated Time:} 1-2 weeks for complete revision + iteration
+\end{frame}
+
+\begin{frame}{Risk Assessment}
+\textbf{Low Risks:}
+\begin{itemize}
+    \item[$\checkmark$] Data generation: already working, reproducible
+    \item[$\checkmark$] Model training: infrastructure proven
+    \item[$\checkmark$] Chinese capability: preliminary results positive
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Medium Risks:}
+\begin{itemize}
+    \item[!] Data collection time: may exceed 30 hours
+    \begin{itemize}
+        \item Mitigation: Can reduce test set to 300 if needed
+    \end{itemize}
+    \item[!] Domain adaptation results: may not be significant
+    \begin{itemize}
+        \item Mitigation: Position as exploratory, not primary claim
+    \end{itemize}
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{High Risks:}
+\begin{itemize}
+    \item[\textcolor{red}{!!}] Performance not competitive with Nougat on English
+    \begin{itemize}
+        \item Mitigation: Already have preliminary positive results
+        \item Fallback: Focus on Chinese + data efficiency story
+    \end{itemize}
+\end{itemize}
+
+\vspace{0.3cm}
+\begin{block}{Overall Assessment}
+Low-to-moderate risk. Core contribution (data generation method) is solid regardless of performance numbers.
+\end{block}
+\end{frame}
+
+%% SECTION 6: CONCLUSION
+\section{Summary}
+
+\begin{frame}{Project Summary}
+\begin{block}{Core Problem}
+Publicly available LaTeX datasets contain only isolated formulas, but real-world applications require mixed text-formula document recognition.
+\end{block}
+
+\begin{block}{Proposed Solution}
+Programmatically assemble training data from real components (Wikipedia text + im2latex formulas) without preserving semantic relationships.
+\end{block}
+
+\begin{block}{Key Advantages}
+\begin{itemize}
+    \item 2 hours generation time vs. weeks of manual collection
+    \item Works for any language (300+ via Wikipedia)
+    \item Enables Chinese LaTeX OCR (currently impossible)
+    \item Individual researcher scale (not institutional)
+\end{itemize}
+\end{block}
+
+\begin{block}{Expected Contributions}
+\begin{enumerate}
+    \item Practical data generation method for mixed text-formula OCR
+    \item Intrinsic multilingual capability via component substitution
+    \item Empirical findings on domain adaptation (exploratory)
+\end{enumerate}
+\end{block}
+\end{frame}
+
+\begin{frame}{Timeline to Submission}
+\begin{table}
+\begin{tabular}{lll}
+\toprule
+\textbf{Phase} & \textbf{Duration} & \textbf{Deliverable} \\
+\midrule
+Data collection & 2-3 weeks & 500 test + 500 finetune \\
+Experiments & 1 week & All tables filled, stats \\
+Paper revision & 1-2 weeks & Submission-ready draft \\
+\midrule
+\textbf{Total} & \textbf{4-6 weeks} & \textbf{Complete paper} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.3cm}
+\textbf{Milestones:}
+\begin{enumerate}
+    \item Week 1-2: Complete data collection
+    \item Week 3: Run all experiments
+    \item Week 4: Draft complete paper
+    \item Week 5-6: Iteration and polish
+\end{enumerate}
+
+\vspace{0.3cm}
+\textbf{Target Venue:} WACV 2025 (if timeline permits) or next available vision conference
+\end{frame}
+
+\begin{frame}{Open Questions for Discussion}
+\textbf{Experimental Design:}
+\begin{enumerate}
+    \item Is 500 test samples sufficient, or should we target 1000?
+    \item Should we include more baseline comparisons (LaTeX-OCR, Pix2Text)?
+    \item Is the K-8 vs. University split the right way to test domain adaptation?
+\end{enumerate}
+
+\vspace{0.3cm}
+\textbf{Contribution Positioning:}
+\begin{enumerate}
+    \item Should we de-emphasize domain adaptation even further?
+    \item Is "programmatically assembled" the right terminology?
+    \item Should we mention bias/hallucination at all, or save for future work?
+\end{enumerate}
+
+\vspace{0.3cm}
+\textbf{Scope:}
+\begin{enumerate}
+    \item Should we validate a third language (e.g., French, Spanish)?
+    \item Should we compare different synthetic-to-real ratios?
+    \item Should we ablate the noise injection components?
+\end{enumerate}
+\end{frame}
+
+\begin{frame}[standout]
+\Huge Thank You!
+
+\vspace{1cm}
+\large Questions \& Discussion
+\end{frame}
+
+\appendix
+
+\begin{frame}{Backup: Detailed Data Generation Algorithm}
+\begin{algorithmic}
+\State \textbf{Input:} Wikipedia corpus $\mathcal{W}$, Formula set $\mathcal{F}$
+\State \textbf{Output:} Training image-LaTeX pairs
+
+\For{$i = 1$ to $1{,}000{,}000$}
+    \State $text \gets$ Sample 100-300 words from $\mathcal{W}$
+    \State $sentences \gets$ Split $text$ into sentences
+    \For{each sentence $s$ in $sentences$}
+        \State Insert $n \sim \text{Poisson}(\lambda=1)$ inline formulas randomly
+    \EndFor
+    \For{every 2-4 sentences}
+        \State Insert 1 display formula from $\mathcal{F}$
+    \EndFor
+    \State Inject noise: 5\% word insertions, 5\% misspellings
+    \State Compile to PDF with XeLaTeX
+    \State Convert to PNG at 200 DPI
+    \State \textbf{yield} (image, LaTeX source)
+\EndFor
+\end{algorithmic}
+
+\vspace{0.3cm}
+\textbf{Parallelization:} 8 CPU cores, 1M samples in $\sim$2 hours
+\end{frame}
+
+\begin{frame}{Backup: Model Architecture Details}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{Encoder: Swin Transformer}
+\begin{itemize}
+    \item Variant: swin-tiny
+    \item Input: $500 \times 400$ RGB
+    \item Output: $n$ embedding vectors
+    \item Pretrained on ImageNet
+    \item Parameters: $\sim$40M
+\end{itemize}
+
+\column{0.5\textwidth}
+\textbf{Decoder: GPT-2}
+\begin{itemize}
+    \item Hidden size: 768
+    \item Attention heads: 12
+    \item Layers: 4
+    \item Max sequence: 296 tokens
+    \item Random init (LaTeX vocab)
+    \item Parameters: $\sim$38M
+\end{itemize}
+\end{columns}
+
+\vspace{0.5cm}
+\textbf{Training:}
+\begin{itemize}
+    \item Optimizer: AdamW ($\beta_1=0.9, \beta_2=0.999$)
+    \item Learning rate: $1.3 \times 10^{-4} \rightarrow 7 \times 10^{-6}$ (cosine)
+    \item Batch size: 24
+    \item Precision: FP16 mixed
+    \item Epochs: 5 (pretrain), 3 (finetune)
+\end{itemize}
+\end{frame}
+
+\end{document}
